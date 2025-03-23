@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Serttel - Sistema de Notificações de Infrações</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <!-- Biblioteca Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
   <style>
     /* Reset e estilos base */
     * {
@@ -386,7 +388,7 @@
       background-color: #2d8057;
     }
     
-    /* Infraction list */
+    /* Infraction list (agora lista de condutores) */
     .infraction-list {
       display: grid;
       gap: 1rem;
@@ -544,91 +546,43 @@
   </div>
 
   <script>
-    // Dados de exemplo das infrações
-    const infractions = [
-      {
-        id: "INF001",
-        vehicleInfo: {
-          plate: "SAO-8900",
-          model: "VLR RRS P/EV A8",
-          owner: "BRUNO DE AGUIAR NASCIMENTO",
-          location: "Av. Paulista, 1000 - São Paulo"
-        },
-        debtInfo: {
-          ipva: 1948.00,
-          previousFines: 489.90,
-          total: 2437.90
-        },
-        infractionDetail: {
-          description: "Estacionamento irregular na Zona Azul de São Paulo",
-          points: 5,
-          date: "13/03/2023",
-          time: "14:32:46",
-          issueDate: "13/03/2023"
-        },
-        paymentInfo: {
-          fine: 195.23,
-          pixCode: "89660000001952300001234567890123456789"
-        },
-        imageUrl: "https://via.placeholder.com/800x600.png?text=Infra%C3%A7%C3%A3o+001"
-      },
-      {
-        id: "INF002",
-        vehicleInfo: {
-          plate: "RIO-2345",
-          model: "HONDA CIVIC LXR",
-          owner: "MARIA SILVA OLIVEIRA",
-          location: "Rua da Consolação, 500 - São Paulo"
-        },
-        debtInfo: {
-          ipva: 1250.00,
-          previousFines: 320.50,
-          total: 1570.50
-        },
-        infractionDetail: {
-          description: "Excesso de velocidade em via urbana",
-          points: 7,
-          date: "15/03/2023",
-          time: "09:45:22",
-          issueDate: "15/03/2023"
-        },
-        paymentInfo: {
-          fine: 293.47,
-          pixCode: "89660000002934700001234567890123456789"
-        },
-        imageUrl: "https://via.placeholder.com/800x600.png?text=Infra%C3%A7%C3%A3o+002"
-      },
-      {
-        id: "INF003",
-        vehicleInfo: {
-          plate: "BHZ-7812",
-          model: "TOYOTA COROLLA XEI",
-          owner: "CARLOS EDUARDO MENDES",
-          location: "Av. Rebouças, 750 - São Paulo"
-        },
-        debtInfo: {
-          ipva: 0,
-          previousFines: 150.25,
-          total: 150.25
-        },
-        infractionDetail: {
-          description: "Avanço de sinal vermelho",
-          points: 7,
-          date: "10/03/2023",
-          time: "16:20:15",
-          issueDate: "10/03/2023"
-        },
-        paymentInfo: {
-          fine: 293.47,
-          pixCode: "89660000002934700001234567890123456790"
-        },
-        imageUrl: "https://via.placeholder.com/800x600.png?text=Infra%C3%A7%C3%A3o+003"
+    /* Inicializando o cliente Supabase com as credenciais fornecidas
+       Nota: Expor credenciais no cliente não é recomendado para produção.
+    */
+    const SUPABASE_URL = 'https://aws-0-us-west-1.pooler.supabase.com';
+    const SUPABASE_KEY = 'gUTO33675866';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let drivers = [];
+
+    // Função para buscar os dados dos condutores a partir da tabela "resultado baixada"
+    async function fetchDrivers() {
+      const { data, error } = await supabaseClient
+        .from('resultado baixada')
+        .select('*');
+      if (error) {
+        console.error('Erro ao buscar dados:', error);
+        return [];
       }
-    ];
+      return data.map(row => ({
+        id: row.placa, // Usando a placa como identificador único
+        vehicleInfo: {
+          plate: row.placa,
+          model: row.veiculo,
+          owner: row.proprietario,
+          location: row["endereco horario"]
+        },
+        debtInfo: {
+          total: row["debitos resticoes"]
+        },
+        imageUrl: "https://via.placeholder.com/800x600.png?text=Sem+Imagem"
+      }));
+    }
 
     // Função para formatar valores monetários
     function formatCurrency(value) {
-      return value.toFixed(2).replace('.', ',');
+      if (isNaN(value)) return value;
+      return parseFloat(value).toFixed(2).replace('.', ',');
     }
 
     // Função para copiar texto para a área de transferência
@@ -664,24 +618,23 @@
       `;
     }
 
-    // Função para renderizar a lista de infrações
-    function renderInfractionList() {
-      let infractionItems = infractions.map(infraction => {
-        const totalAmount = infraction.debtInfo.total + infraction.paymentInfo.fine;
+    // Função para renderizar a lista de condutores
+    function renderDriverList() {
+      let driverItems = drivers.map(driver => {
         return `
-          <a href="#infraction-${infraction.id}" class="infraction-item" onclick="showInfractionDetail('${infraction.id}')">
-            <div class="infraction-id">${infraction.id}</div>
+          <a href="#driver-${driver.id}" class="infraction-item" onclick="showDriverDetail('${driver.id}')">
+            <div class="infraction-id">${driver.id}</div>
             <div class="infraction-detail">
-              <span class="infraction-detail-label">Placa:</span> ${infraction.vehicleInfo.plate}
+              <span class="infraction-detail-label">Placa:</span> ${driver.vehicleInfo.plate}
             </div>
             <div class="infraction-detail">
-              <span class="infraction-detail-label">Proprietário:</span> ${infraction.vehicleInfo.owner}
+              <span class="infraction-detail-label">Proprietário:</span> ${driver.vehicleInfo.owner}
             </div>
             <div class="infraction-detail">
-              <span class="infraction-detail-label">Data:</span> ${infraction.infractionDetail.date}
+              <span class="infraction-detail-label">Local:</span> ${driver.vehicleInfo.location}
             </div>
-            <div class="infraction-total">
-              Total: R$ ${formatCurrency(totalAmount)}
+            <div class="infraction-detail">
+              <span class="infraction-detail-label">Débitos:</span> ${formatCurrency(driver.debtInfo.total)}
             </div>
           </a>
         `;
@@ -689,19 +642,19 @@
 
       return `
         <div class="container">
-          <h1 class="main-title">Notificações de Autuação</h1>
+          <h1 class="main-title">Notificações de Condutores</h1>
           <div class="infraction-list">
-            ${infractionItems}
+            ${driverItems}
           </div>
         </div>
       `;
     }
 
-    // Função para renderizar os detalhes de uma infração
-    function renderInfractionDetail(id) {
-      const infraction = infractions.find(inf => inf.id === id);
+    // Função para renderizar os detalhes de um condutor
+    function renderDriverDetail(id) {
+      const driver = drivers.find(drv => drv.id === id);
       
-      if (!infraction) {
+      if (!driver) {
         return `
           <div class="error">
             <div class="error-box">
@@ -711,37 +664,20 @@
                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
               </svg>
               <h2 class="error-title">Erro</h2>
-              <p class="error-message">Infração não encontrada</p>
+              <p class="error-message">Condutor não encontrado</p>
             </div>
           </div>
         `;
       }
 
-      const totalAmount = infraction.debtInfo.total + infraction.paymentInfo.fine;
-
       return `
         <div class="container">
           <h1 class="main-title">
-            Notificação de Autuação de Infração de Trânsito
-            <span class="ml-2" style="font-size: 0.875rem; color: #3D9970;">#${infraction.id}</span>
+            Detalhes do Condutor
+            <span class="ml-2" style="font-size: 0.875rem; color: #3D9970;">${driver.id}</span>
           </h1>
 
-          <!-- Alert -->
-          <div class="alert">
-            <svg class="alert-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-            <div class="alert-content">
-              <p class="alert-title">Atenção</p>
-              <p class="alert-message">
-                Esta notificação deve ser paga até o vencimento para evitar multas e pontos adicionais.
-              </p>
-            </div>
-          </div>
-
-          <!-- Vehicle Information -->
+          <!-- Informações do Veículo -->
           <div class="card mb-6">
             <button class="card-header" onclick="toggleSection('vehicle-info')">
               <h3>Informações do Veículo</h3>
@@ -754,25 +690,25 @@
               <div class="grid grid-cols-2 mb-4">
                 <div class="info-box">
                   <p class="info-label">Placa</p>
-                  <p class="info-value">${infraction.vehicleInfo.plate}</p>
+                  <p class="info-value">${driver.vehicleInfo.plate}</p>
                 </div>
                 <div class="info-box">
                   <p class="info-label">Marca/Modelo</p>
-                  <p class="info-value">${infraction.vehicleInfo.model}</p>
+                  <p class="info-value">${driver.vehicleInfo.model}</p>
                 </div>
               </div>
               <div class="info-box mb-4">
                 <p class="info-label">Proprietário</p>
-                <p class="info-value">${infraction.vehicleInfo.owner}</p>
+                <p class="info-value">${driver.vehicleInfo.owner}</p>
               </div>
               <div class="info-box">
                 <p class="info-label">Local</p>
-                <p class="info-value">${infraction.vehicleInfo.location}</p>
+                <p class="info-value">${driver.vehicleInfo.location}</p>
               </div>
             </div>
           </div>
 
-          <!-- Outstanding Debts -->
+          <!-- Débitos em Aberto do Veículo -->
           <div class="card mb-6">
             <button class="card-header" onclick="toggleSection('debts-info')">
               <h3>Débitos em Aberto do Veículo</h3>
@@ -783,178 +719,29 @@
 
             <div id="debts-info" class="card-content">
               <div class="info-box">
-                <div style="display: flex; align-items: flex-start; margin-bottom: 1rem;">
-                  <svg style="margin-right: 0.5rem; color: #ff9800; flex-shrink: 0;" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                    <line x1="12" y1="9" x2="12" y2="13"></line>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                  </svg>
-                  <p style="font-size: 0.875rem; color: #333;">
-                    Para utilizar nosso programa de proteção à CNH, é necessário quitar todos os débitos pendentes do
-                    veículo.
-                  </p>
-                </div>
-
-                <div style="margin-top: 1rem; border-top: 1px solid #ddd; padding-top: 1rem;">
-                  <p style="font-size: 0.75rem; color: #777; margin-bottom: 0.75rem;">Detalhamento dos débitos:</p>
-
-                  <div style="background-color: #fff; padding: 0.75rem; border-radius: 4px; border: 1px solid #ddd; margin-bottom: 0.75rem;">
-                    <div style="display: flex; justify-content: space-between;">
-                      <span style="font-size: 0.875rem; color: #333;">IPVA em atraso:</span>
-                      <span style="font-size: 0.875rem; font-weight: 500; color: #333;">
-                        R$ ${formatCurrency(infraction.debtInfo.ipva)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div style="background-color: #fff; padding: 0.75rem; border-radius: 4px; border: 1px solid #ddd; margin-bottom: 0.75rem;">
-                    <div style="display: flex; justify-content: space-between;">
-                      <span style="font-size: 0.875rem; color: #333;">Multas anteriores:</span>
-                      <span style="font-size: 0.875rem; font-weight: 500; color: #333;">
-                        R$ ${formatCurrency(infraction.debtInfo.previousFines)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div style="background-color: #fff; padding: 0.75rem; border-radius: 4px; border: 1px solid #ddd;">
-                    <div style="display: flex; justify-content: space-between;">
-                      <span style="font-size: 0.875rem; font-weight: 500; color: #333;">Total de débitos:</span>
-                      <span style="font-size: 0.875rem; font-weight: 700; color: #3D9970;">
-                        R$ ${formatCurrency(infraction.debtInfo.total)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                <p class="info-label">Débitos em Aberto</p>
+                <p class="info-value">${formatCurrency(driver.debtInfo.total)}</p>
               </div>
             </div>
           </div>
 
-          <!-- Infraction Details -->
+          <!-- Imagem do Veículo -->
           <div class="card mb-6">
-            <button class="card-header" onclick="toggleSection('infraction-details')">
-              <h3>Detalhes da Infração</h3>
-              <svg id="infraction-details-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <button class="card-header" onclick="toggleSection('driver-image')">
+              <h3>Imagem do Veículo</h3>
+              <svg id="driver-image-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="18 15 12 9 6 15"></polyline>
               </svg>
             </button>
 
-            <div id="infraction-details" class="card-content">
-              <div class="info-box mb-4">
-                <p class="info-label">Infração</p>
-                <p class="info-value">${infraction.infractionDetail.description}</p>
-                <p class="info-label mt-1">
-                  ${infraction.infractionDetail.points} pontos na CNH | Veículo sujeito à remoção
-                </p>
-              </div>
-
-              <div class="grid grid-cols-3">
-                <div class="info-box">
-                  <p class="info-label">Data</p>
-                  <p class="info-value">${infraction.infractionDetail.date}</p>
-                </div>
-                <div class="info-box">
-                  <p class="info-label">Hora</p>
-                  <p class="info-value">${infraction.infractionDetail.time}</p>
-                </div>
-                <div class="info-box">
-                  <p class="info-label">Emissão</p>
-                  <p class="info-value">${infraction.infractionDetail.issueDate}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Violation Image -->
-          <div class="card mb-6">
-            <button class="card-header" onclick="toggleSection('infraction-image')">
-              <h3>Imagem da Infração</h3>
-              <svg id="infraction-image-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="18 15 12 9 6 15"></polyline>
-              </svg>
-            </button>
-
-            <div id="infraction-image" class="card-content">
+            <div id="driver-image" class="card-content">
               <div class="info-box">
                 <div style="width: 100%; height: 200px; background-color: #eee; border-radius: 4px; overflow: hidden; position: relative;">
-                  <img src="${infraction.imageUrl}" alt="Imagem da infração" style="width: 100%; height: 100%; object-fit: cover;">
+                  <img src="${driver.imageUrl}" alt="Imagem do veículo" style="width: 100%; height: 100%; object-fit: cover;">
                 </div>
               </div>
             </div>
           </div>
-        </div>
-
-        <!-- Payment Information -->
-        <div class="payment-section">
-          <div class="container">
-            <div class="payment-card">
-              <h3 class="payment-title">Informações de Pagamento</h3>
-
-              <div class="payment-details">
-                <div>
-                  <p class="info-label">Detalhamento</p>
-                  <div class="mt-2">
-                    <div class="payment-item">
-                      <span style="margin-right: 2rem;">Multa:</span>
-                      <span>R$ ${formatCurrency(infraction.paymentInfo.fine)}</span>
-                    </div>
-                    <div class="payment-item">
-                      <span style="margin-right: 2rem;">Débitos em aberto:</span>
-                      <span>R$ ${formatCurrency(infraction.debtInfo.total)}</span>
-                    </div>
-                    <div class="payment-total">
-                      <span style="margin-right: 2rem;">Total:</span>
-                      <span>R$ ${formatCurrency(totalAmount)}</span>
-                    </div>
-                  </div>
-                </div>
-                <button class="btn btn-primary mt-4" style="margin-top: 1rem;">
-                  Pagar Agora
-                </button>
-              </div>
-
-              <div class="payment-code">
-                <p class="code-label">Código de Pagamento</p>
-                <div class="code-container">
-                  <div class="code-text">
-                    ${infraction.paymentInfo.pixCode}
-                  </div>
-                  <button 
-                    class="code-copy"
-                    onclick="copyToClipboard('${infraction.paymentInfo.pixCode}')"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <div class="qr-container">
-                <div class="qr-box">
-                  <div class="qr-image">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                      <rect x="7" y="7" width="3" height="3"></rect>
-                      <rect x="14" y="7" width="3" height="3"></rect>
-                      <rect x="7" y="14" width="3" height="3"></rect>
-                      <rect x="14" y="14" width="3" height="3"></rect>
-                    </svg>
-                  </div>
-                </div>
-              </div>
-              <p class="qr-caption">Escaneie o QR Code para pagar via PIX</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Floating Payment Button -->
-        <div class="payment-bar">
-          <div>
-            <p class="payment-bar-label">Total a pagar</p>
-            <p class="payment-bar-value">R$ ${formatCurrency(totalAmount)}</p>
-          </div>
-          <button class="btn btn-primary">Pagar Agora</button>
         </div>
       `;
     }
@@ -964,7 +751,7 @@
       const section = document.getElementById(id);
       const icon = document.getElementById(`${id}-icon`);
       
-      if (section.style.display === 'none') {
+      if (section.style.display === 'none' || !section.style.display) {
         section.style.display = 'block';
         icon.innerHTML = '<polyline points="18 15 12 9 6 15"></polyline>';
       } else {
@@ -973,40 +760,41 @@
       }
     }
 
-    // Função para mostrar a lista de infrações
-    function showInfractionList() {
+    // Função para mostrar a lista de condutores
+    function showDriverList() {
       const appElement = document.getElementById('app');
-      appElement.innerHTML = renderHeader() + renderInfractionList();
+      appElement.innerHTML = renderHeader() + renderDriverList();
       window.location.hash = '';
     }
 
-    // Função para mostrar os detalhes de uma infração
-    function showInfractionDetail(id) {
+    // Função para mostrar os detalhes de um condutor
+    function showDriverDetail(id) {
       const appElement = document.getElementById('app');
-      appElement.innerHTML = renderHeader() + renderInfractionDetail(id);
-      window.location.hash = `infraction-${id}`;
+      appElement.innerHTML = renderHeader() + renderDriverDetail(id);
+      window.location.hash = `driver-${id}`;
     }
 
     // Inicialização da aplicação
-    function initApp() {
+    async function initApp() {
+      drivers = await fetchDrivers();
       const hash = window.location.hash;
       
-      if (hash && hash.startsWith('#infraction-')) {
-        const id = hash.replace('#infraction-', '');
-        showInfractionDetail(id);
+      if (hash && hash.startsWith('#driver-')) {
+        const id = hash.replace('#driver-', '');
+        showDriverDetail(id);
       } else {
-        showInfractionList();
+        showDriverList();
       }
 
-      // Adicionar evento para o botão voltar do navegador
+      // Atualiza a visualização ao alterar a URL (botão voltar do navegador)
       window.addEventListener('hashchange', function() {
         const newHash = window.location.hash;
         
-        if (newHash && newHash.startsWith('#infraction-')) {
-          const id = newHash.replace('#infraction-', '');
-          showInfractionDetail(id);
+        if (newHash && newHash.startsWith('#driver-')) {
+          const id = newHash.replace('#driver-', '');
+          showDriverDetail(id);
         } else {
-          showInfractionList();
+          showDriverList();
         }
       });
     }
@@ -1015,8 +803,8 @@
     document.addEventListener('DOMContentLoaded', initApp);
 
     // Expor funções para o escopo global
-    window.showInfractionList = showInfractionList;
-    window.showInfractionDetail = showInfractionDetail;
+    window.showDriverList = showDriverList;
+    window.showDriverDetail = showDriverDetail;
     window.toggleSection = toggleSection;
     window.copyToClipboard = copyToClipboard;
   </script>
